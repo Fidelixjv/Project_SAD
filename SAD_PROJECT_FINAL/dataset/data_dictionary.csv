@@ -1,0 +1,24 @@
+file_group,column_name,data_type,unit,description
+primary_data_files,index,integer,,Source row index or listing identifier.
+primary_data_files,title,string,,"Listing title, generally including make and model."
+primary_data_files,price,number,EUR,Advertised vehicle price.
+primary_data_files,currency,string,,Currency code or symbol for the advertised price.
+primary_data_files,year,integer,,Vehicle registration or model year.
+primary_data_files,mileage,number,kilometers,Advertised vehicle mileage.
+primary_data_files,fuel,string,,"Fuel type, such as diesel, gasoline, hybrid, or electric."
+primary_data_files,transmission,string,,Transmission type.
+primary_data_files,displacement,number,cc,Engine displacement where available.
+primary_data_files,horsepower,number,hp,Engine power where available.
+primary_data_files,location,string,,Advertised listing location in Portugal.
+car_market_file_manifest.csv,file_name,string,,Dataset file name.
+car_market_file_manifest.csv,file_type,string,,File extension.
+car_market_file_manifest.csv,row_count,integer,rows,Number of records.
+car_market_file_manifest.csv,column_count,integer,columns,Number of columns.
+car_market_file_manifest.csv,columns,string,,Pipe-separated column list.
+car_market_file_manifest.csv,min_price,number,EUR,Minimum advertised price.
+car_market_file_manifest.csv,median_price,number,EUR,Median advertised price.
+car_market_file_manifest.csv,max_price,number,EUR,Maximum advertised price.
+car_market_file_manifest.csv,min_year,integer,,Oldest vehicle year.
+car_market_file_manifest.csv,max_year,integer,,Newest vehicle year.
+car_market_file_manifest.csv,median_mileage,number,kilometers,Median mileage.
+car_market_file_manifest.csv,unique_locations,integer,locations,Number of unique location strings.

@@ -1,0 +1,2 @@
+file_name,file_type,row_count,column_count,columns,min_price,median_price,max_price,min_year,max_year,median_mileage,unique_locations
+market_analysis_cars_nov2025.csv,csv,37529,11,index|title|price|currency|year|mileage|fuel|transmission|displacement|horsepower|location,500.0,18750.0,500000.0,1950,2025,97949.5,978

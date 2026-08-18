@@ -1,0 +1,4 @@
+check_name,status,detail,affected_files
+Primary files present,PASS,1 primary CSV files found.,0
+Required columns,PASS,All inspected primary CSV files include the expected columns for their dataset.,0
+Documentation files,PASS,"README, manifest, data dictionary, validation report, and cover image included.",0
