@@ -1,3 +1,12 @@
+"""
+ETL - Extracao, Transformacao e Carregamento
+=============================================
+Este script extrai os dados brutos de um CSV sobre o mercado de automoveis
+em Portugal, transforma-os (limpeza, classificacao, criacao de dimensoes)
+e carrega num Data Warehouse em SQLite, seguindo o modelo estrela
+(star schema) com tabelas de dimensao e tabela de factos.
+"""
+
 import pandas as pd
 import numpy as np
 import sqlite3
@@ -5,9 +14,14 @@ import os
 import re
 from datetime import datetime
 
+# ===================== CAMINHOS DOS FICHEIROS =====================
+# Caminho do dataset bruto (CSV) e do banco de dados de destino (SQLite)
 RAW_PATH = os.path.join("dataset", "market_analysis_cars_nov2025.csv")
 DB_PATH = os.path.join("data_warehouse.db")
 
+# ===================== MARCAS CONHECIDAS =====================
+# Lista de marcas de automoveis conhecidas para extrair do titulo do anuncio.
+# Usada na funcao extract_brand() para identificar a marca a partir do titulo.
 KNOWN_BRANDS = [
     "Mercedes-Benz", "Alfa Romeo", "Land Rover", "Aston Martin",
     "Rolls-Royce", "Great Wall",
@@ -22,12 +36,23 @@ KNOWN_BRANDS = [
 
 
 def extract_brand(title: str) -> str:
+    """
+    Extrai a marca do automovel a partir do titulo do anuncio.
+
+    Percorre a lista de marcas conhecidas e verifica se o titulo comeca
+    com alguma delas (case-insensitive). Se nao encontrar, retorna a
+    primeira palavra do titulo como marca.
+
+    Exemplo: "BMW Série 3 320d" -> "BMW"
+    """
     if not isinstance(title, str):
         return "Desconhecida"
     t = title.strip()
+    # Tenta casar com uma marca conhecida no inicio do titulo
     for brand in KNOWN_BRANDS:
         if t.lower().startswith(brand.lower()):
             return brand
+    # Se nenhuma marca conhecida foi encontrada, usa a primeira palavra
     parts = t.split()
     if parts:
         return parts[0]
@@ -35,25 +60,45 @@ def extract_brand(title: str) -> str:
 
 
 def extract_model(title: str, brand: str) -> str:
+    """
+    Extrai o modelo do automovel a partir do titulo, removendo a marca.
+
+    Apos remover a marca, limpa caracteres especiais, numeros no inicio,
+    e siglas de motorizacao (ex: dCi, TSI, TFSI). Tambem limita o
+    resultado a no maximo 3 palavras, parando em palavras-chave de
+    versao/comfort (ex: "pack", "exclusive", "style").
+
+    Exemplo: "Volkswagen Golf 1.6 TDI Comfortline" -> "Golf 1.6 TDI"
+    """
     if not isinstance(title, str):
         return "Desconhecido"
     t = title.strip()
     b_len = len(brand)
+    # Remove a marca do inicio do titulo
     rest = t[b_len:].strip()
+    # Remove separadores no inicio (ex: " - ")
     rest = re.sub(r"^\s*[-–]\s*", "", rest)
+    # Remove numeros no inicio (ex: "1.6" ou "2015")
     rest = re.sub(r"^\d[\d.]*\s*", "", rest)
-    rest = re.sub(r"^(dCi|TCe|TSI|TFSI|BlueHDi|PureTech|i-VTEC|VVT-i|HSD|T-GDi|MPI|CRDI|CDI|TDI|SDI|JTS|TS)\s*", "", rest, flags=re.IGNORECASE)
+    # Remove siglas de motorizacao conhecidas (ex: dCi, TSI, TFSI, CDI)
+    rest = re.sub(
+        r"^(dCi|TCe|TSI|TFSI|BlueHDi|PureTech|i-VTEC|VVT-i|HSD|T-GDi|MPI|CRDI|CDI|TDI|SDI|JTS|TS)\s*",
+        "", rest, flags=re.IGNORECASE
+    )
     rest = rest.strip()
     tokens = rest.split()
     if not tokens:
         return "Desconhecido"
+    # Coleta ate 3 tokens como nome do modelo, parando em palavras de versao
     model_tokens = []
-    stop = {"pack", "exclusive", "style", "comfort", "business", "advance",
-            "active", "lounge", "s-line", "amg", "line", "edition", "grande",
-            "sport", "tech", "family", "urban", "premium", "standard",
-            "base", "express", "intense", "initiale", "zen", "intens",
-            "n-line", "fr", "gt", "gti", "rs", "r-line", "suv", "coupé",
-            "cabriolet", "break", "van", "sedan"}
+    stop = {
+        "pack", "exclusive", "style", "comfort", "business", "advance",
+        "active", "lounge", "s-line", "amg", "line", "edition", "grande",
+        "sport", "tech", "family", "urban", "premium", "standard",
+        "base", "express", "intense", "initiale", "zen", "intens",
+        "n-line", "fr", "gt", "gti", "rs", "r-line", "suv", "coupé",
+        "cabriolet", "break", "van", "sedan"
+    }
     for tok in tokens:
         if tok.lower().rstrip(",.") in stop:
             break
@@ -64,6 +109,15 @@ def extract_model(title: str, brand: str) -> str:
 
 
 def classify_fuel(fuel: str) -> str:
+    """
+    Classifica o tipo de combustivel em categorias padronizadas.
+
+    Recebe o valor bruto do campo 'fuel' do CSV e retorna uma das
+    categorias: Diesel, Gasolina, Eletrico, Hibrido, Hibrido Plug-In,
+    GPL ou Outro.
+
+    Exemplo: "Diesel (s/s)" -> "Diesel"
+    """
     if not isinstance(fuel, str):
         return "Outro"
     f = fuel.strip().lower()
@@ -83,6 +137,14 @@ def classify_fuel(fuel: str) -> str:
 
 
 def classify_transmission(trans: str) -> str:
+    """
+    Classifica o tipo de transmissao em categorias padronizadas.
+
+    Recebe o valor bruto do campo 'transmission' e retorna:
+    'Automatica', 'Manual' ou 'Outro'.
+
+    Exemplo: "Automatica" -> "Automática"
+    """
     if not isinstance(trans, str):
         return "Outro"
     t = trans.strip().lower()
@@ -94,56 +156,83 @@ def classify_transmission(trans: str) -> str:
 
 
 def build_warehouse():
+    """
+    Funcao principal que executa todo o pipeline ETL.
+
+    1. Le o dataset bruto (CSV)
+    2. Extrai e classifica marcas, modelos, combustivel e transmissao
+    3. Calcula a idade do veiculo
+    4. Cria as tabelas de dimensao (star schema)
+    5. Cria a tabela de factos
+    6. Grava tudo em banco de dados SQLite
+    """
+
+    # ==================== EXTRACAO ====================
     print("Lendo dataset bruto...")
     df = pd.read_csv(RAW_PATH)
     print(f"  Registos carregados: {len(df)}")
 
+    # ==================== TRANSFORMACAO ====================
+    # Extrai marca e modelo a partir do titulo do anuncio
     print("A extrair marcas e modelos...")
     df["brand"] = df["title"].apply(extract_brand)
     df["model"] = df.apply(lambda r: extract_model(r["title"], r["brand"]), axis=1)
 
-    print("A classificar combustível e transmissão...")
+    # Classifica combustivel e transmissao em categorias padronizadas
+    print("A classificar combustivel e transmissao...")
     df["fuel_type"] = df["fuel"].apply(classify_fuel)
     df["trans_type"] = df["transmission"].apply(classify_transmission)
 
+    # Calcula a idade do veiculo baseado no ano atual
     current_year = datetime.now().year
     df["vehicle_age"] = current_year - df["year"]
 
-    # --- Dimensões ---
-    print("A criar dimensões...")
+    # ==================== DIMENSOES (STAR SCHEMA) ====================
+    # Tabela de dimensao de marcas com ID unico
+    print("A criar dimensoes...")
 
     dim_brand = df[["brand"]].drop_duplicates().reset_index(drop=True)
     dim_brand["brand_id"] = dim_brand.index + 1
     dim_brand = dim_brand[["brand_id", "brand"]]
 
+    # Tabela de dimensao de modelos com ID unico, ligada a marca via brand_id
     dim_model = df[["brand", "model"]].drop_duplicates().reset_index(drop=True)
     dim_model["model_id"] = dim_model.index + 1
     brand_map = dict(zip(dim_brand["brand"], dim_brand["brand_id"]))
     dim_model["brand_id"] = dim_model["brand"].map(brand_map)
 
+    # Tabela de dimensao de tipos de combustivel
     dim_fuel = df[["fuel_type"]].drop_duplicates().reset_index(drop=True)
     dim_fuel["fuel_id"] = dim_fuel.index + 1
     dim_fuel = dim_fuel[["fuel_id", "fuel_type"]]
 
+    # Tabela de dimensao de tipos de transmissao
     dim_trans = df[["trans_type"]].drop_duplicates().reset_index(drop=True)
     dim_trans["trans_id"] = dim_trans.index + 1
     dim_trans = dim_trans[["trans_id", "trans_type"]]
 
+    # Tabela de dimensao de localizacoes
     dim_location = df[["location"]].drop_duplicates().reset_index(drop=True)
     dim_location["location_id"] = dim_location.index + 1
     dim_location = dim_location[["location_id", "location"]]
 
-    # --- Tabela de fatos ---
+    # ==================== TABELA DE FACTOS ====================
+    # Tabela de factos contendo as metricas e FKs para as dimensoes
     print("A criar tabela de factos...")
+
+    # Mapeamento de modelo para o ID correspondente (chave composta brand|model)
     model_map = dict(zip(
         dim_model["brand"].astype(str) + "|" + dim_model["model"],
         dim_model["model_id"]
     ))
     dim_model = dim_model[["model_id", "brand_id", "model"]]
+
+    # Mapeamentos para as chaves estrangeiras
     fuel_map = dict(zip(dim_fuel["fuel_type"], dim_fuel["fuel_id"]))
     trans_map = dict(zip(dim_trans["trans_type"], dim_trans["trans_id"]))
     loc_map = dict(zip(dim_location["location"], dim_location["location_id"]))
 
+    # Constroi a tabela de factos com IDs das dimensoes e metricas numericas
     fact = pd.DataFrame()
     fact["listing_id"] = df["index"]
     fact["model_id"] = df.apply(
@@ -159,12 +248,13 @@ def build_warehouse():
     fact["horsepower"] = df["horsepower"]
     fact["vehicle_age"] = df["vehicle_age"]
 
-    # --- Gravar em SQLite ---
+    # ==================== CARREGAMENTO NO SQLite ====================
     print(f"A gravar data warehouse em {DB_PATH}...")
     if os.path.exists(DB_PATH):
         os.remove(DB_PATH)
 
     conn = sqlite3.connect(DB_PATH)
+    # Grava todas as tabelas de dimensoes e factos no banco
     dim_brand.to_sql("dim_brand", conn, index=False)
     dim_model.to_sql("dim_model", conn, index=False)
     dim_fuel.to_sql("dim_fuel", conn, index=False)
@@ -172,7 +262,7 @@ def build_warehouse():
     dim_location.to_sql("dim_location", conn, index=False)
     fact.to_sql("fact_listings", conn, index=False)
 
-    # Criar índices
+    # Cria indices nas chaves estrangeiras para melhorar performance de JOINs
     conn.execute("CREATE INDEX IF NOT EXISTS idx_fact_model ON fact_listings(model_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_fact_fuel ON fact_listings(fuel_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_fact_trans ON fact_listings(trans_id)")
@@ -180,12 +270,13 @@ def build_warehouse():
     conn.commit()
     conn.close()
 
+    # Resumo final do data warehouse criado
     print("Data warehouse criado com sucesso!")
     print(f"  Marcas: {len(dim_brand)}")
     print(f"  Modelos: {len(dim_model)}")
-    print(f"  Tipos de combustível: {len(dim_fuel)}")
-    print(f"  Tipos de transmissão: {len(dim_trans)}")
-    print(f"  Localizações: {len(dim_location)}")
+    print(f"  Tipos de combustivel: {len(dim_fuel)}")
+    print(f"  Tipos de transmissao: {len(dim_trans)}")
+    print(f"  Localizacoes: {len(dim_location)}")
     print(f"  Factos: {len(fact)}")
 
 
