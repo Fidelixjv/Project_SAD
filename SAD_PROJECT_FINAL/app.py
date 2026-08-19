@@ -1,10 +1,10 @@
 """
 App Streamlit - Sistema de Apoio a Decisao (SAD)
 =================================================
-Dashboard interativo para analise do mercado de automoveis em Portugal.
+Dashboard interativo para análise do mercado de automóveis em Portugal.
 Conecta-se ao data warehouse SQLite e apresenta KPIs, graficos e tabelas
-respondendo a 5 perguntas de negocio sobre marcas, precos, idade,
-caracteristicas influentes e relacao preco/ano.
+respondendo a perguntas de negócio sobre marcas, preços, idade,
+características influentes e relação preço/ano.
 """
 
 import streamlit as st
@@ -17,7 +17,7 @@ import os
 
 # ===================== CONFIGURACAO DA PAGINA =====================
 # Define titulo da aba do navegador e layout wide (tela cheia)
-st.set_page_config(page_title="SAD - Mercado de Automoveis PT", layout="wide")
+st.set_page_config(page_title="SAD - Mercado de Automóveis PT", layout="wide")
 
 # Caminho do banco de dados SQLite (relativo ao script)
 DB_PATH = os.path.join(os.path.dirname(__file__), "data_warehouse.db")
@@ -65,8 +65,8 @@ def load_data():
 
 def main():
     # ===================== TITULO E CABECALHO =====================
-    st.title("Sistema de Apoio a Decisao - Mercado de Automoveis em Portugal")
-    st.caption("Equipe: Joao Vitor Fidelix da Silva | Eric Reullyson Silva Leite | Rafael dos Santos Sousa")
+    st.title("Sistema de Apoio à Decisão - Mercado de Automóveis em Portugal")
+    st.caption("Equipe: João Vitor Fidelix da Silva | Eric Reullyson Silva Leite | Rafael dos Santos Sousa")
     st.markdown("---")
 
     # Carrega os dados do data warehouse
@@ -82,11 +82,11 @@ def main():
 
     # Filtro por tipo de combustivel (todas selecionadas por padrao)
     fuels = sorted(df["fuel_type"].unique())
-    sel_fuels = st.sidebar.multiselect("Combustivel", fuels, default=fuels)
+    sel_fuels = st.sidebar.multiselect("Combustível", fuels, default=fuels)
 
     # Filtro por tipo de transmissao (todas selecionadas por padrao)
     trans_options = sorted(df["trans_type"].unique())
-    sel_trans = st.sidebar.multiselect("Transmissao", trans_options, default=trans_options)
+    sel_trans = st.sidebar.multiselect("Transmissão", trans_options, default=trans_options)
 
     # Filtro por ano (slider de intervalo)
     year_min = int(df["year"].min())
@@ -95,7 +95,7 @@ def main():
 
     # Filtro por preco (slider de intervalo em EUR)
     price_max = int(df["price"].max())
-    sel_price = st.sidebar.slider("Preco (EUR)", 0, price_max, (0, price_max))
+    sel_price = st.sidebar.slider("Preço (EUR)", 0, price_max, (0, price_max))
 
     # Filtro por quilometragem (slider de intervalo em km)
     mileage_max = int(df["mileage"].max())
@@ -114,32 +114,124 @@ def main():
 
     # Se nenhum registro corresponder aos filtros, exibe aviso e encerra
     if filtered.empty:
-        st.warning("Nenhum registo corresponde aos filtros selecionados.")
+        st.warning("Nenhum registro corresponde aos filtros selecionados.")
         return
 
     # ==================== KPIs - METRICAS GERAIS ====================
     # Primeira linha de metricas: total de anuncios, precos e idade media
-    st.subheader("Metricas Gerais")
+    st.subheader("Métricas Gerais")
     c1, c2, c3, c4, c5, c6 = st.columns(6)
-    c1.metric("Total Anuncios", f"{len(filtered):,}")
-    c2.metric("Preco Medio", f"EUR {filtered['price'].mean():,.0f}")
-    c3.metric("Preco Mediano", f"EUR {filtered['price'].median():,.0f}")
-    c4.metric("Preco Minimo", f"EUR {filtered['price'].min():,.0f}")
-    c5.metric("Preco Maximo", f"EUR {filtered['price'].max():,.0f}")
-    c6.metric("Idade Media", f"{filtered['vehicle_age'].mean():.1f} anos")
+    c1.metric("Total de Anúncios", f"{len(filtered):,}")
+    c2.metric("Preço Médio", f"EUR {filtered['price'].mean():,.0f}")
+    c3.metric("Preço Mediano", f"EUR {filtered['price'].median():,.0f}")
+    c4.metric("Preço Mínimo", f"EUR {filtered['price'].min():,.0f}")
+    c5.metric("Preço Máximo", f"EUR {filtered['price'].max():,.0f}")
+    c6.metric("Idade Média", f"{filtered['vehicle_age'].mean():.1f} anos")
 
     # Segunda linha de metricas: quilometragem media e marcas distintas
     c7, c8, c9 = st.columns(3)
-    c7.metric("Km Media", f"{filtered['mileage'].mean():,.0f} km")
-    c8.metric("Km Mediana", f"{filtered['mileage'].median():,.0f} km")
+    c7.metric("Quilometragem Média", f"{filtered['mileage'].mean():,.0f} km")
+    c8.metric("Quilometragem Mediana", f"{filtered['mileage'].median():,.0f} km")
     c9.metric("Marcas Distintas", f"{filtered['brand'].nunique()}")
+
+    # ==================== SAD - ESTIMATIVA DE PRECO JUSTO ====================
+    st.markdown("---")
+    st.header("SAD: Estimar o preço justo de um carro")
+    st.write("Informe as características do veículo para comparar com anúncios semelhantes.")
+
+    sad_brands = sorted(filtered["brand"].dropna().unique())
+    sad_brand = st.selectbox("Marca", sad_brands, key="sad_brand")
+    sad_models = sorted(filtered.loc[filtered["brand"] == sad_brand, "model"].dropna().unique())
+
+    with st.form("price_estimator_form"):
+        sad_col1, sad_col2, sad_col3 = st.columns(3)
+        with sad_col1:
+            sad_year = st.number_input(
+                "Ano", min_value=year_min, max_value=year_max,
+                value=year_max, step=1, key="sad_year"
+            )
+            sad_mileage = st.number_input(
+                "Quilometragem (km)", min_value=0, max_value=mileage_max,
+                value=int(filtered["mileage"].median()), step=1000, key="sad_mileage"
+            )
+        with sad_col2:
+            sad_model = st.selectbox("Modelo", sad_models, key=f"sad_model_{sad_brand}")
+            sad_fuel = st.selectbox("Combustível", fuels, key="sad_fuel")
+            sad_trans = st.selectbox("Transmissão", trans_options, key="sad_trans")
+        with sad_col3:
+            displacement_median = filtered["displacement"].median()
+            horsepower_median = filtered["horsepower"].median()
+            sad_displacement = st.number_input(
+                "Cilindrada (cm³)", min_value=0.0, value=float(displacement_median),
+                step=100.0, key="sad_displacement"
+            )
+            sad_horsepower = st.number_input(
+                "Potência (CV)", min_value=0.0, value=float(horsepower_median),
+                step=1.0, key="sad_horsepower"
+            )
+            estimate_submitted = st.form_submit_button("Estimar preço", type="primary")
+
+    if estimate_submitted:
+        numeric_features = ["year", "mileage", "displacement", "horsepower"]
+        target_values = pd.Series({
+            "year": sad_year,
+            "mileage": sad_mileage,
+            "displacement": sad_displacement,
+            "horsepower": sad_horsepower,
+        })
+        comparison_pool = filtered[filtered["brand"] == sad_brand].copy()
+        same_model_pool = comparison_pool[comparison_pool["model"] == sad_model]
+        if len(same_model_pool) >= 5:
+            comparison_pool = same_model_pool
+
+        comparison_pool = comparison_pool.copy()
+        for feature in numeric_features:
+            comparison_pool[feature] = comparison_pool[feature].fillna(filtered[feature].median())
+            scale = comparison_pool[feature].quantile(0.75) - comparison_pool[feature].quantile(0.25)
+            if not scale or pd.isna(scale):
+                scale = comparison_pool[feature].std()
+            if not scale or pd.isna(scale):
+                scale = 1.0
+            comparison_pool[f"distance_{feature}"] = (
+                (comparison_pool[feature] - target_values[feature]).abs() / scale
+            )
+
+        comparison_pool["distance_categorical"] = (
+            (comparison_pool["model"] != sad_model).astype(float) * 0.8
+            + (comparison_pool["fuel_type"] != sad_fuel).astype(float) * 0.4
+            + (comparison_pool["trans_type"] != sad_trans).astype(float) * 0.3
+        )
+        comparison_pool["similarity_distance"] = (
+            comparison_pool["distance_year"] * 0.35
+            + comparison_pool["distance_mileage"] * 0.30
+            + comparison_pool["distance_displacement"] * 0.10
+            + comparison_pool["distance_horsepower"] * 0.10
+            + comparison_pool["distance_categorical"]
+        )
+        comparables = comparison_pool.nsmallest(min(20, len(comparison_pool)), "similarity_distance")
+        fair_price = comparables["price"].median()
+        low_price = comparables["price"].quantile(0.25)
+        high_price = comparables["price"].quantile(0.75)
+
+        result_col1, result_col2, result_col3 = st.columns(3)
+        result_col1.metric("Estimativa de preço justo", f"EUR {fair_price:,.0f}")
+        result_col2.metric("Faixa recomendada", f"EUR {low_price:,.0f} - EUR {high_price:,.0f}")
+        result_col3.metric("Anúncios comparáveis", f"{len(comparables)}")
+        st.caption("Estimativa baseada na mediana dos anúncios mais semelhantes dentro dos filtros selecionados.")
+
+        comparable_table = comparables[["brand", "model", "year", "mileage", "fuel_type", "trans_type", "price"]].copy()
+        comparable_table.columns = ["Marca", "Modelo", "Ano", "Km", "Combustível", "Transmissão", "Preço"]
+        st.dataframe(
+            comparable_table.style.format({"Km": "{:,.0f} km", "Preço": "EUR {:,.0f}"}),
+            use_container_width=True, hide_index=True
+        )
 
     st.markdown("---")
 
     # ==================== PERGUNTA 1 ====================
     # Quais sao as marcas de automoveis mais anunciadas em Portugal?
     # Apresenta grafico de barras (top 20) e pizza (top 10)
-    st.header("1. Quais sao as marcas de automoveis mais anunciadas em Portugal?")
+    st.header("1. Quais são as marcas de automóveis mais anunciadas em Portugal?")
 
     brand_counts = filtered["brand"].value_counts().head(20).reset_index()
     brand_counts.columns = ["Marca", "Quantidade"]
@@ -150,7 +242,7 @@ def main():
         fig_bar = px.bar(
             brand_counts, x="Marca", y="Quantidade",
             color="Quantidade", color_continuous_scale="Blues",
-            title="Top 20 Marcas por Numero de Anuncios"
+            title="Top 20 Marcas por Número de Anúncios"
         )
         fig_bar.update_layout(xaxis_tickangle=-45)
         st.plotly_chart(fig_bar, use_container_width=True)
@@ -159,7 +251,7 @@ def main():
         # Grafico de pizza: participacao das top 10 marcas
         fig_pie = px.pie(
             brand_counts.head(10), names="Marca", values="Quantidade",
-            title="Participacao das Top 10 Marcas"
+            title="Participação das Top 10 Marcas"
         )
         st.plotly_chart(fig_pie, use_container_width=True)
 
@@ -172,7 +264,7 @@ def main():
     # Qual e o preco medio dos carros por marca e modelo?
     # Mostra preco medio por marca (top 15) e permite selecionar marca
     # para ver preco medio por modelo
-    st.header("2. Qual e o preco medio dos carros por marca e modelo?")
+    st.header("2. Qual é o preço médio dos carros por marca e modelo?")
 
     # Calcula estatisticas de preco para as 15 marcas com mais anuncios
     top_brands = filtered["brand"].value_counts().head(15).index.tolist()
@@ -182,29 +274,29 @@ def main():
         .agg(["mean", "median", "min", "max", "count"])
         .reset_index()
     )
-    brand_price.columns = ["Marca", "Preco Medio", "Preco Mediano", "Minimo", "Maximo", "N"]
-    brand_price = brand_price.sort_values("Preco Medio", ascending=False)
+    brand_price.columns = ["Marca", "Preço Médio", "Preço Mediano", "Mínimo", "Máximo", "N"]
+    brand_price = brand_price.sort_values("Preço Médio", ascending=False)
 
     # Grafico de barras com erro (mostra ate o preco maximo)
     fig_bp = px.bar(
-        brand_price, x="Marca", y="Preco Medio",
-        error_y=brand_price["Maximo"] - brand_price["Preco Medio"],
-        color="Preco Medio", color_continuous_scale="RdYlGn_r",
-        title="Preco Medio por Marca (Top 15 com mais anuncios)"
+        brand_price, x="Marca", y="Preço Médio",
+        error_y=brand_price["Máximo"] - brand_price["Preço Médio"],
+        color="Preço Médio", color_continuous_scale="RdYlGn_r",
+        title="Preço Médio por Marca (Top 15 com mais anúncios)"
     )
     fig_bp.update_layout(xaxis_tickangle=-45)
     st.plotly_chart(fig_bp, use_container_width=True)
 
     # Tabela formatada com precos em EUR
     st.dataframe(brand_price.style.format({
-        "Preco Medio": "EUR {:,.0f}",
-        "Preco Mediano": "EUR {:,.0f}",
-        "Minimo": "EUR {:,.0f}",
-        "Maximo": "EUR {:,.0f}"
+        "Preço Médio": "EUR {:,.0f}",
+        "Preço Mediano": "EUR {:,.0f}",
+        "Mínimo": "EUR {:,.0f}",
+        "Máximo": "EUR {:,.0f}"
     }), use_container_width=True, hide_index=True)
 
     # Preco medio por modelo dentro de uma marca selecionada
-    st.subheader("Preco Medio por Modelo")
+    st.subheader("Preço Médio por Modelo")
     selected_brand = st.selectbox("Selecione uma marca para ver os modelos:", top_brands)
     model_price = (
         filtered[filtered["brand"] == selected_brand]
@@ -212,14 +304,14 @@ def main():
         .agg(["mean", "median", "count"])
         .reset_index()
     )
-    model_price.columns = ["Modelo", "Preco Medio", "Preco Mediano", "N"]
+    model_price.columns = ["Modelo", "Preço Médio", "Preço Mediano", "N"]
     model_price = model_price.sort_values("N", ascending=False)
 
     # Grafico de barras com o preco medio dos modelos da marca selecionada
     fig_mp = px.bar(
-        model_price.head(15), x="Modelo", y="Preco Medio",
+        model_price.head(15), x="Modelo", y="Preço Médio",
         color="N", color_continuous_scale="Teal",
-        title=f"Preco Medio por Modelo - {selected_brand}"
+        title=f"Preço Médio por Modelo - {selected_brand}"
     )
     st.plotly_chart(fig_mp, use_container_width=True)
 
@@ -228,7 +320,7 @@ def main():
     # ==================== PERGUNTA 3 ====================
     # Veiculos mais novos possuem precos significativamente maiores?
     # Analise da relacao entre idade do veiculo e preco
-    st.header("3. Veiculos mais novos possuem precos significativamente maiores?")
+    st.header("3. Veículos mais novos possuem preços significativamente maiores?")
 
     # Agrupa por idade e calcula preco medio/mediano
     age_price = (
@@ -236,16 +328,16 @@ def main():
         .agg(["mean", "median", "count"])
         .reset_index()
     )
-    age_price.columns = ["Idade (anos)", "Preco Medio", "Preco Mediano", "N"]
+    age_price.columns = ["Idade (anos)", "Preço Médio", "Preço Mediano", "N"]
 
     col_a, col_b = st.columns(2)
     with col_a:
         # Scatter plot: preco medio vs idade (tamanho = quantidade de anuncios)
         fig_age = px.scatter(
-            age_price, x="Idade (anos)", y="Preco Medio",
-            size="N", color="Preco Medio",
+            age_price, x="Idade (anos)", y="Preço Médio",
+            size="N", color="Preço Médio",
             color_continuous_scale="RdYlGn_r",
-            title="Relacao entre Idade do Veiculo e Preco Medio",
+            title="Relação entre Idade do Veículo e Preço Médio",
             size_max=40
         )
         st.plotly_chart(fig_age, use_container_width=True)
@@ -254,8 +346,8 @@ def main():
         # Box plot: distribuicao de preco para cada idade
         fig_box = px.box(
             filtered, x="vehicle_age", y="price",
-            title="Distribuicao de Preco por Idade",
-            labels={"vehicle_age": "Idade (anos)", "price": "Preco (EUR)"}
+            title="Distribuição de Preço por Idade",
+            labels={"vehicle_age": "Idade (anos)", "price": "Preço (EUR)"}
         )
         fig_box.update_layout(xaxis=dict(dtick=1))
         st.plotly_chart(fig_box, use_container_width=True)
@@ -268,10 +360,10 @@ def main():
     # ==================== PERGUNTA 4 ====================
     # Quais caracteristicas tem maior influencia no valor do automovel?
     # Analises por combustivel, transmissao, correlacao e dispersao
-    st.header("4. Quais caracteristicas tem maior influencia no valor do automovel?")
+    st.header("4. Quais características têm maior influência no valor do automóvel?")
 
     # --- Subsecao: Analise por Combustivel ---
-    st.subheader("Analise por Combustivel")
+    st.subheader("Análise por Combustível")
     col_a, col_b = st.columns(2)
     with col_a:
         # Estatisticas de preco agrupadas por tipo de combustivel
@@ -280,13 +372,13 @@ def main():
             .agg(["mean", "median", "count"])
             .reset_index()
         )
-        fuel_stats.columns = ["Combustivel", "Preco Medio", "Preco Mediano", "N"]
-        fuel_stats = fuel_stats.sort_values("Preco Medio", ascending=False)
+        fuel_stats.columns = ["Combustível", "Preço Médio", "Preço Mediano", "N"]
+        fuel_stats = fuel_stats.sort_values("Preço Médio", ascending=False)
 
         # Grafico de barras: preco medio por combustivel
         fig_fuel = px.bar(
-            fuel_stats, x="Combustivel", y="Preco Medio",
-            color="Combustivel", title="Preco Medio por Tipo de Combustivel"
+            fuel_stats, x="Combustível", y="Preço Médio",
+            color="Combustível", title="Preço Médio por Tipo de Combustível"
         )
         st.plotly_chart(fig_fuel, use_container_width=True)
 
@@ -295,13 +387,13 @@ def main():
         fig_fuel_box = px.box(
             filtered, x="fuel_type", y="price",
             color="fuel_type",
-            title="Distribuicao de Preco por Combustivel",
-            labels={"price": "Preco (EUR)"}
+            title="Distribuição de Preço por Combustível",
+            labels={"price": "Preço (EUR)"}
         )
         st.plotly_chart(fig_fuel_box, use_container_width=True)
 
     # --- Subsecao: Analise por Transmissao ---
-    st.subheader("Analise por Transmissao")
+    st.subheader("Análise por Transmissão")
     col_a, col_b = st.columns(2)
     with col_a:
         # Estatisticas de preco agrupadas por tipo de transmissao
@@ -310,12 +402,12 @@ def main():
             .agg(["mean", "median", "count"])
             .reset_index()
         )
-        trans_stats.columns = ["Transmissao", "Preco Medio", "Preco Mediano", "N"]
+        trans_stats.columns = ["Transmissão", "Preço Médio", "Preço Mediano", "N"]
 
         # Grafico de barras: preco medio por transmissao
         fig_trans = px.bar(
-            trans_stats, x="Transmissao", y="Preco Medio",
-            color="Transmissao", title="Preco Medio por Transmissao"
+            trans_stats, x="Transmissão", y="Preço Médio",
+            color="Transmissão", title="Preço Médio por Transmissão"
         )
         st.plotly_chart(fig_trans, use_container_width=True)
 
@@ -324,13 +416,13 @@ def main():
         fig_trans_box = px.box(
             filtered, x="trans_type", y="price",
             color="trans_type",
-            title="Distribuicao de Preco por Transmissao",
-            labels={"price": "Preco (EUR)"}
+            title="Distribuição de Preço por Transmissão",
+            labels={"price": "Preço (EUR)"}
         )
         st.plotly_chart(fig_trans_box, use_container_width=True)
 
     # --- Subsecao: Matriz de Correlacao ---
-    st.subheader("Analise de Correlacao (Caracteristicas Numericas)")
+    st.subheader("Análise de Correlação (Características Numéricas)")
     # Seleciona apenas colunas numericas e calcula correlacao de Pearson
     numeric_cols = ["price", "year", "mileage", "vehicle_age", "displacement", "horsepower"]
     corr_df = filtered[numeric_cols].dropna()
@@ -339,35 +431,35 @@ def main():
     # Heatmap da matriz de correlacao
     fig_corr = px.imshow(
         corr, text_auto=".2f", color_continuous_scale="RdBu_r",
-        title="Matriz de Correlacao entre Variaveis",
-        labels=dict(color="Correlacao")
+        title="Matriz de Correlação entre Variáveis",
+        labels=dict(color="Correlação")
     )
     st.plotly_chart(fig_corr, use_container_width=True)
 
     # --- Subsecao: Quilometragem vs Preco ---
-    st.subheader("Importancia: Quilometragem vs Preco por Combustivel")
+    st.subheader("Importância: Quilometragem vs Preço por Combustível")
     # Scatter plot com linha de tendencia OLS (regressao linear)
     # Requer o pacote statsmodels para a linha de tendencia
     sample_size = min(3000, len(filtered))
     fig_mil = px.scatter(
         filtered.sample(sample_size, random_state=42),
         x="mileage", y="price", color="fuel_type",
-        opacity=0.5, title="Quilometragem vs Preco",
-        labels={"mileage": "Quilometragem (km)", "price": "Preco (EUR)"},
+        opacity=0.5, title="Quilometragem vs Preço",
+        labels={"mileage": "Quilometragem (km)", "price": "Preço (EUR)"},
         trendline="ols"
     )
     st.plotly_chart(fig_mil, use_container_width=True)
 
     # --- Subsecao: Potencia vs Preco ---
-    st.subheader("Importancia: Potencia (CV) vs Preco")
+    st.subheader("Importância: Potência (CV) vs Preço")
     # Scatter plot filtrando apenas registros com valor de potencia valido
     hp_df = filtered[filtered["horsepower"].notna()]
     sample_size_hp = min(3000, len(hp_df))
     fig_hp = px.scatter(
         hp_df.sample(sample_size_hp, random_state=42),
         x="horsepower", y="price", color="fuel_type",
-        opacity=0.5, title="Potencia vs Preco",
-        labels={"horsepower": "Potencia (CV)", "price": "Preco (EUR)"},
+        opacity=0.5, title="Potência vs Preço",
+        labels={"horsepower": "Potência (CV)", "price": "Preço (EUR)"},
         trendline="ols"
     )
     st.plotly_chart(fig_hp, use_container_width=True)
@@ -378,7 +470,7 @@ def main():
     # Quais modelos apresentam melhor relacao entre preco e ano?
     # Calcula um "valor_ano_ratio" (preco medio / ano medio) para ranquear
     # modelos do melhor (mais novo e barato) ao pior (mais caro e antigo)
-    st.header("5. Quais modelos apresentam melhor relacao entre preco e ano de fabricacao?")
+    st.header("5. Quais modelos apresentam melhor relação entre preço e ano de fabricação?")
 
     # Agrupa por marca e modelo, calculando metricas agregadas
     model_analysis = (
@@ -394,7 +486,7 @@ def main():
 
     # Slider para filtrar modelos com no minimo N anuncios (evita outliers)
     min_anuncios = st.slider(
-        "Minimo de anuncios por modelo para analise:", 1, 50, 5
+        "Mínimo de anúncios por modelo para análise:", 1, 50, 5
     )
     model_filtered = model_analysis[model_analysis["n_anuncios"] >= min_anuncios].copy()
 
@@ -402,42 +494,60 @@ def main():
     model_filtered["valor_ano_ratio"] = model_filtered["preco_medio"] / model_filtered["ano_medio"]
 
     # Scatter plot: preco medio vs ano medio, com tamanho = nr anuncios, cor = ratio
-    st.subheader("Modelos com Melhor Relacao Preco/Ano (Mais Novos e Mais Baratos)")
+    st.subheader("Modelos com Melhor Relação Preço/Ano (Mais Novos e Mais Baratos)")
     best_value = model_filtered.nsmallest(20, "valor_ano_ratio")
     fig_bv = px.scatter(
         model_filtered, x="ano_medio", y="preco_medio",
         size="n_anuncios", color="valor_ano_ratio",
         color_continuous_scale="RdYlGn",
         hover_name="model", hover_data=["brand", "km_media"],
-        title="Relacao Preco vs Ano (tamanho = n. anuncios, cor = ratio)",
-        labels={"ano_medio": "Ano Medio", "preco_medio": "Preco Medio (EUR)"}
+        title="Relação Preço vs Ano (tamanho = nº de anúncios, cor = razão)",
+        labels={
+            "ano_medio": "Ano Médio", "preco_medio": "Preço Médio (EUR)",
+            "brand": "Marca", "model": "Modelo", "km_media": "Quilometragem Média",
+            "n_anuncios": "Nº de Anúncios", "valor_ano_ratio": "Razão Preço/Ano"
+        }
     )
     st.plotly_chart(fig_bv, use_container_width=True)
 
     col_a, col_b = st.columns(2)
     with col_a:
         # Tabela top 20 melhores custo-beneficio (menor ratio)
-        st.subheader("Top 20 - Melhor Custo-Beneficio")
+        st.subheader("Top 20 - Melhor Custo-Benefício")
+        best_value_display = best_value[[
+            "brand", "model", "preco_medio", "ano_medio", "km_media", "n_anuncios", "valor_ano_ratio"
+        ]].rename(columns={
+            "brand": "Marca", "model": "Modelo", "preco_medio": "Preço Médio",
+            "ano_medio": "Ano Médio", "km_media": "Quilometragem Média",
+            "n_anuncios": "Nº de Anúncios", "valor_ano_ratio": "Razão Preço/Ano"
+        })
         st.dataframe(
-            best_value[["brand", "model", "preco_medio", "ano_medio", "km_media", "n_anuncios", "valor_ano_ratio"]].style.format({
-                "preco_medio": "EUR {:,.0f}",
-                "ano_medio": "{:.0f}",
-                "km_media": "{:,.0f} km",
-                "valor_ano_ratio": "{:.1f}"
+            best_value_display.style.format({
+                "Preço Médio": "EUR {:,.0f}",
+                "Ano Médio": "{:.0f}",
+                "Quilometragem Média": "{:,.0f} km",
+                "Razão Preço/Ano": "{:.1f}"
             }),
             use_container_width=True, hide_index=True
         )
 
     with col_b:
         # Tabela top 20 piores custo-beneficio (maior ratio = mais caro e antigo)
-        st.subheader("Top 20 - Mais Caros vs Antigos")
+        st.subheader("Top 20 - Mais Caros versus Antigos")
         worst_value = model_filtered.nlargest(20, "valor_ano_ratio")
+        worst_value_display = worst_value[[
+            "brand", "model", "preco_medio", "ano_medio", "km_media", "n_anuncios", "valor_ano_ratio"
+        ]].rename(columns={
+            "brand": "Marca", "model": "Modelo", "preco_medio": "Preço Médio",
+            "ano_medio": "Ano Médio", "km_media": "Quilometragem Média",
+            "n_anuncios": "Nº de Anúncios", "valor_ano_ratio": "Razão Preço/Ano"
+        })
         st.dataframe(
-            worst_value[["brand", "model", "preco_medio", "ano_medio", "km_media", "n_anuncios", "valor_ano_ratio"]].style.format({
-                "preco_medio": "EUR {:,.0f}",
-                "ano_medio": "{:.0f}",
-                "km_media": "{:,.0f} km",
-                "valor_ano_ratio": "{:.1f}"
+            worst_value_display.style.format({
+                "Preço Médio": "EUR {:,.0f}",
+                "Ano Médio": "{:.0f}",
+                "Quilometragem Média": "{:,.0f} km",
+                "Razão Preço/Ano": "{:.1f}"
             }),
             use_container_width=True, hide_index=True
         )
@@ -446,26 +556,26 @@ def main():
 
     # ==================== METRICAS COMPLEMENTARES ====================
     # Graficos adicionais para enriquecer a analise
-    st.header("Metricas Complementares")
+    st.header("Métricas Complementares")
 
     # Grafico de pizza: distribuicao de anuncios por combustivel
-    st.subheader("Distribuicao por Tipo de Combustivel")
+    st.subheader("Distribuição por Tipo de Combustível")
     fuel_dist = filtered["fuel_type"].value_counts().reset_index()
-    fuel_dist.columns = ["Combustivel", "Quantidade"]
-    fig_fd = px.pie(fuel_dist, names="Combustivel", values="Quantidade",
-                    title="Distribuicao de Anuncios por Combustivel")
+    fuel_dist.columns = ["Combustível", "Quantidade"]
+    fig_fd = px.pie(fuel_dist, names="Combustível", values="Quantidade",
+                    title="Distribuição de Anúncios por Combustível")
     st.plotly_chart(fig_fd, use_container_width=True)
 
     # Grafico de pizza: distribuicao de anuncios por transmissao
-    st.subheader("Distribuicao por Transmissao")
+    st.subheader("Distribuição por Transmissão")
     trans_dist = filtered["trans_type"].value_counts().reset_index()
-    trans_dist.columns = ["Transmissao", "Quantidade"]
-    fig_td = px.pie(trans_dist, names="Transmissao", values="Quantidade",
-                    title="Distribuicao de Anuncios por Transmissao")
+    trans_dist.columns = ["Transmissão", "Quantidade"]
+    fig_td = px.pie(trans_dist, names="Transmissão", values="Quantidade",
+                    title="Distribuição de Anúncios por Transmissão")
     st.plotly_chart(fig_td, use_container_width=True)
 
     # Grafico de barras: quilometragem media por marca (top 15)
-    st.subheader("Quilometragem Media por Marca")
+    st.subheader("Quilometragem Média por Marca")
     top_brands_km = filtered["brand"].value_counts().head(15).index.tolist()
     brand_km = (
         filtered[filtered["brand"].isin(top_brands_km)]
@@ -473,12 +583,12 @@ def main():
         .mean()
         .reset_index()
     )
-    brand_km.columns = ["Marca", "Km Media"]
-    brand_km = brand_km.sort_values("Km Media", ascending=False)
+    brand_km.columns = ["Marca", "Quilometragem Média"]
+    brand_km = brand_km.sort_values("Quilometragem Média", ascending=False)
 
-    fig_km = px.bar(brand_km, x="Marca", y="Km Media",
-                    color="Km Media", color_continuous_scale="Oranges",
-                    title="Quilometragem Media por Marca (Top 15)")
+    fig_km = px.bar(brand_km, x="Marca", y="Quilometragem Média",
+                    color="Quilometragem Média", color_continuous_scale="Oranges",
+                    title="Quilometragem Média por Marca (Top 15)")
     fig_km.update_layout(xaxis_tickangle=-45)
     st.plotly_chart(fig_km, use_container_width=True)
 
@@ -494,10 +604,17 @@ def main():
     # Secao expansivel com tabela de dados filtrados e opcao de download CSV
     st.markdown("---")
     with st.expander("Ver dados filtrados"):
-        st.dataframe(filtered, use_container_width=True, hide_index=True)
+        filtered_display = filtered.rename(columns={
+            "listing_id": "ID do Anúncio", "year": "Ano", "price": "Preço",
+            "mileage": "Quilometragem", "displacement": "Cilindrada",
+            "horsepower": "Potência", "vehicle_age": "Idade do Veículo",
+            "brand": "Marca", "model": "Modelo", "fuel_type": "Combustível",
+            "trans_type": "Transmissão", "location": "Localização"
+        })
+        st.dataframe(filtered_display, use_container_width=True, hide_index=True)
         # Gera CSV em memoria para download
         csv = filtered.to_csv(index=False).encode("utf-8")
-        st.download_button("Download CSV", csv, "dados_filtrados.csv", "text/csv")
+        st.download_button("Baixar CSV", csv, "dados_filtrados.csv", "text/csv")
 
 
 if __name__ == "__main__":
